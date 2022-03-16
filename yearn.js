@@ -22,15 +22,14 @@ const ethereumProvider = new ethers.providers.JsonRpcProvider(ethereumEndpoint);
 
 // const fantomEndpoint = process.env.FANTOM
 const fantomEndpoint = "https://rpc.ftm.tools/";
+const arbitrumEndpoint = "https://arb1.arbitrum.io/rpc";
 const fantomProvider = new ethers.providers.JsonRpcProvider(fantomEndpoint);
+const arbitrumProvider = new ethers.providers.JsonRpcProvider(arbitrumEndpoint);
 
 let vaultAbi = [
   "function pricePerShare() public view returns (uint256)",
   "function decimals() public view returns (uint256)",
 ];
-//   "function balanceOf(address) public view returns (uint256)",
-//   "function totalSupply() public view returns (uint256)",
-// ];
 
 // only fantom for now
 async function oneDayAgoPrice(vault) {
@@ -75,7 +74,7 @@ async function thirtyDayAgoPrice(vault) {
 
 async function listFantomVaults() {
   try {
-    let vaults = await fetchApi(250)
+    let vaults = await fetchApi(250);
     // let vaults = fantomBlob;
     let vaultArray = [];
     vaults.forEach((yearnGrab) => {
@@ -91,9 +90,11 @@ async function listFantomVaults() {
   }
 }
 
-async function listVaults() {
+async function listVaults(chain) {
+  let chainId = 1
+  if(chain === 42161) {chainId = 42161} 
   try {
-    let vaults = await fetchApi(1)
+    let vaults = await fetchApi(chainId);
     // let vaults = mainBlob;
     let vaultArray = [];
     vaults.forEach((yearnGrab) => {
@@ -111,6 +112,13 @@ async function listVaults() {
 async function getPricePerShare(vaultAddress, network) {
   try {
     let vaultContract = {};
+    if (network === 42161) {
+      vaultContract = new ethers.Contract(
+        vaultAddress,
+        vaultAbi,
+        arbitrumProvider
+      );
+    }
 
     if (network === 250) {
       vaultContract = new ethers.Contract(
@@ -141,41 +149,47 @@ async function getPricePerShare(vaultAddress, network) {
   }
 }
 
-
-async function historicalPrice(vault,network) {
+async function historicalPrice(vault, network) {
   let url =
-    "https://yearnapybot.azurewebsites.net/api/chains/" + network + "/vaults/" +
+    "https://yearnapybot.azurewebsites.net/api/chains/" +
+    network +
+    "/vaults/" +
     vault +
     "/pps/1d";
-    let url7d = "https://yearnapybot.azurewebsites.net/api/chains/" + network + "/vaults/" +
+  let url7d =
+    "https://yearnapybot.azurewebsites.net/api/chains/" +
+    network +
+    "/vaults/" +
     vault +
     "/pps/7d";
-    let url30d = "https://yearnapybot.azurewebsites.net/api/chains/" + network + "/vaults/" +
+  let url30d =
+    "https://yearnapybot.azurewebsites.net/api/chains/" +
+    network +
+    "/vaults/" +
     vault +
     "/pps/30d";
   // console.log("url: ", url);
   try {
-    let [priceHistoryFetch,priceHistoryFetch7d,priceHistoryFetch30d] = await Promise.all([
-      fetch(url),
-      fetch(url7d),
-      fetch(url30d)])
+    let [priceHistoryFetch, priceHistoryFetch7d, priceHistoryFetch30d] =
+      await Promise.all([fetch(url), fetch(url7d), fetch(url30d)]);
     let priceHistoryJson = await priceHistoryFetch.json();
     let priceHistoryJson7d = await priceHistoryFetch7d.json();
     let priceHistoryJson30d = await priceHistoryFetch30d.json();
 
-    let history = {oneDayAgo: {
-      price: priceHistoryJson.pps[0],
-      timestamp: priceHistoryJson.timestamps[0],
-    },
-    sevenDayAgo: {
-      price: priceHistoryJson7d.pps[0],
-      timestamp: priceHistoryJson7d.timestamps[0],
-    },
-    thirtyDayAgo:{
-      price: priceHistoryJson30d.pps[0],
-      timestamp: priceHistoryJson30d.timestamps[0],
-    }
-  }
+    let history = {
+      oneDayAgo: {
+        price: priceHistoryJson.pps[0],
+        timestamp: priceHistoryJson.timestamps[0],
+      },
+      sevenDayAgo: {
+        price: priceHistoryJson7d.pps[0],
+        timestamp: priceHistoryJson7d.timestamps[0],
+      },
+      thirtyDayAgo: {
+        price: priceHistoryJson30d.pps[0],
+        timestamp: priceHistoryJson30d.timestamps[0],
+      },
+    };
     return history;
   } catch (error) {
     console.log(error);
@@ -183,19 +197,29 @@ async function historicalPrice(vault,network) {
   }
 }
 
-
 async function run() {
   client.once("ready", () => {
     console.log("Ready!");
   });
   client.on("messageCreate", (message) => {
     // .addField('', '', true)
-    if (message.content === "=vaults") {
-    }
+    // if (message.content === "=vaults") {
+    // }
     if (message.content === "=ftmvaults") {
       let listString = "";
       {
         listFantomVaults().then((vaultList) => {
+          vaultList.forEach((vault) => {
+            listString += " `" + vault + "`";
+          });
+          message.reply(listString);
+        });
+      }
+    }
+    if (message.content === "=arbvaults" || message.content === "=arbitrumvaults") {
+      let listString = "";
+      {
+        listVaults(42161).then((vaultList) => {
           vaultList.forEach((vault) => {
             listString += " `" + vault + "`";
           });
@@ -405,12 +429,15 @@ async function run() {
         console.log(error);
       }
     }
-    if(message.content.startsWith("=vision") || message.content.startsWith("=ftmvision")) {
+    if (
+      message.content.startsWith("=vision") ||
+      message.content.startsWith("=ftmvision")
+    ) {
       let vaultRequest = message.content.split(" ");
       let vault = vaultRequest[1];
       let network = 1; // default mainnet
-      if(message.content.startsWith("=ftmvision")) {
-        network = 250
+      if (message.content.startsWith("=ftmvision")) {
+        network = 250;
       }
       try {
         getVaultDataVision(vault, network).then((vaultObject) => {
@@ -419,7 +446,7 @@ async function run() {
             return;
           }
           let vault = vaultObject;
-          // console.log("vaul object from data:", vault);
+          // console.log("vault object from data:", vault);
           //   let embedReturn = vaultEmbed(vaultObject);
           let explorer = "https://etherscan.io/address/";
           let explorerName = "Etherscan";
@@ -500,7 +527,15 @@ async function run() {
             .addField("\u200B", footerText);
           // console.log("vault embed msg: ", vaultEmbedMsg);
           // message.reply({ embeds: [vaultEmbedMsg] });
-          message.reply(vault.name + " \ \ 1d: " + vault.oneDayApy + " \ \ 7d: " + vault.sevenDayApy + " \ \ 30d: " +  vault.thirtyDayApy)
+          message.reply(
+            vault.name +
+              "   1d: " +
+              vault.oneDayApy +
+              "   7d: " +
+              vault.sevenDayApy +
+              "   30d: " +
+              vault.thirtyDayApy
+          );
         });
       } catch (error) {
         console.log(error);
@@ -510,16 +545,32 @@ async function run() {
     if (
       message.content.startsWith("=ftmvault ") ||
       message.content.startsWith("=vault ") ||
-      message.content.startsWith("=fantomvault ")
+      message.content.startsWith("=fantomvault ") ||
+      message.content.startsWith("=arbvault") ||
+      message.content.startsWith("=arbitrumvault") ||
+      message.content.startsWith("=arbivault")
     ) {
       let vaultRequest = message.content.split(" ");
       let vault = vaultRequest[1];
       let network = 1; // default mainnet
+      let explorer = "https://etherscan.io/address/";
+      let explorerName = "Etherscan";
       if (
         message.content.startsWith("=ftmvault ") ||
         message.content.startsWith("=fantomvault ")
       ) {
         network = 250;
+        explorer = "https://ftmscan.com/address/";
+        explorerName = "Ftmscan";
+      }
+      if (
+        message.content.startsWith("=arbvault") ||
+        message.content.startsWith("=arbitrumvault") ||
+        message.content.startsWith("=arbivault")
+      ) {
+        network = 42161;
+        explorer = "https://arbiscan.io/address/";
+        explorerName = "Arbiscan";
       }
       //   let vaultInfo = await vaultData(vault);
       try {
@@ -531,12 +582,7 @@ async function run() {
           let vault = vaultObject;
           // console.log("vaul object from data:", vault);
           //   let embedReturn = vaultEmbed(vaultObject);
-          let explorer = "https://etherscan.io/address/";
-          let explorerName = "Etherscan";
-          if (network === 250) {
-            explorer = "https://ftmscan.com/address/";
-            explorerName = "Ftmscan";
-          }
+
           let tvl = "TVL    `$" + commas(vault.tvl) + "`";
           let apy = "`" + apyFormat(vault.apy) + "%` ";
 
@@ -676,17 +722,17 @@ async function fetchApi(network) {
   try {
     let jsonURL = "https://api.yearn.finance/";
     let uriPath = "";
-    if (network === 250) {
-      uriPath = "v1/chains/250/vaults/all";
-    } else if (network === 1) {
-      uriPath = "v1/chains/1/vaults/all";
+    if (network === 250 || network === 1 || network === 42161) {
+      uriPath = "v1/chains/" + network + "/vaults/all";
+    } else {
+      return 0;
     }
-    // console.log(jsonURL + uriPath)
     let call = await fetch(jsonURL + uriPath);
     let result = await call.json();
     return result;
   } catch (error) {
-    console.log(error);return 0;
+    console.log(error);
+    return 0;
   }
 }
 
@@ -728,6 +774,9 @@ async function getStrategyNames(vault, network) {
     if (network === 250) {
       explorer = "https://ftmscan.com/address/";
     }
+    if (network === 42161) {
+      explorer = "https://arbiscan.io/address";
+    }
     let strategyApi =
       "https://cache.yearn.finance/v1/chains/" +
       network +
@@ -768,7 +817,7 @@ async function getStrategyNames(vault, network) {
   }
 }
 
-// not being used - only gets description, not name - consolidatd to getStrategyNames()
+// not being used - only gets description, not name -> consolidatd to getStrategyNames()
 // async function getStrategyDescription(vault, network) {
 //   let vaultFetch = await fetchApi(1);
 //   let vaultExample = vaultFetch.filter((x) => x.symbol === vault);
@@ -840,7 +889,6 @@ async function getVaultData(vault, network) {
   return vaultReturn;
 }
 
-
 async function getVaultDataVision(vault, network) {
   let jsonResult = {};
   try {
@@ -860,63 +908,60 @@ async function getVaultDataVision(vault, network) {
 
   newestVault.pps = pricePerShare.toFixed(4);
   let vaultReturn = vaultObjectify(newestVault);
-  
-    // let oneDayAgo = await oneDayAgoPrice(vaultReturn.address);
-    let historical = await historicalPrice(vaultReturn.address,network)
-    let oneDayAgoTime = historical.oneDayAgo.timestamp;
-    let sevenDayAgoTime = historical.sevenDayAgo.timestamp;
-    let thirtyDayAgoTime = historical.thirtyDayAgo.timestamp;
 
+  // let oneDayAgo = await oneDayAgoPrice(vaultReturn.address);
+  let historical = await historicalPrice(vaultReturn.address, network);
+  let oneDayAgoTime = historical.oneDayAgo.timestamp;
+  let sevenDayAgoTime = historical.sevenDayAgo.timestamp;
+  let thirtyDayAgoTime = historical.thirtyDayAgo.timestamp;
 
-    let nowTime = Date.now();
-    let oneDayAgoActual = nowTime - 60 * 60 * 24 * 1000;
-    let sevenDayAgoActual = nowTime - 60 * 60 * 24 * 1000 * 7;
-    let thirtyDayAgoActual = nowTime - 60 * 60 * 24 * 1000 * 30;
-    let oneDay = oneDayAgoTime / oneDayAgoActual;
-    let sevenDay = sevenDayAgoTime / sevenDayAgoActual
-    let thirtyDay = thirtyDayAgoTime / thirtyDayAgoActual
+  let nowTime = Date.now();
+  let oneDayAgoActual = nowTime - 60 * 60 * 24 * 1000;
+  let sevenDayAgoActual = nowTime - 60 * 60 * 24 * 1000 * 7;
+  let thirtyDayAgoActual = nowTime - 60 * 60 * 24 * 1000 * 30;
+  let oneDay = oneDayAgoTime / oneDayAgoActual;
+  let sevenDay = sevenDayAgoTime / sevenDayAgoActual;
+  let thirtyDay = thirtyDayAgoTime / thirtyDayAgoActual;
 
-    let annualized = oneDay * 365;
-    let annualizedSevenDay = sevenDay * (365/7)
-    let annualizedThirtyDay = thirtyDay * (365/30)
-    let priceChange = parseFloat(pricePerShare) - parseFloat(historical.oneDayAgo.price);
-    let priceChangeSevenDay = parseFloat(pricePerShare) - parseFloat(historical.sevenDayAgo.price);
-    let priceChangeThirtyDay = parseFloat(pricePerShare) - parseFloat(historical.thirtyDayAgo.price);
+  let annualized = oneDay * 365;
+  let annualizedSevenDay = sevenDay * (365 / 7);
+  let annualizedThirtyDay = thirtyDay * (365 / 30);
+  let priceChange =
+    parseFloat(pricePerShare) - parseFloat(historical.oneDayAgo.price);
+  let priceChangeSevenDay =
+    parseFloat(pricePerShare) - parseFloat(historical.sevenDayAgo.price);
+  let priceChangeThirtyDay =
+    parseFloat(pricePerShare) - parseFloat(historical.thirtyDayAgo.price);
 
+  let oneDayApr = (priceChange / pricePerShare) * annualized;
+  let sevenDayApr = (priceChangeSevenDay / pricePerShare) * annualizedSevenDay;
+  let thirtyDayApr =
+    (priceChangeThirtyDay / pricePerShare) * annualizedThirtyDay;
 
-    let oneDayApr = (priceChange / pricePerShare) * annualized;
-    let sevenDayApr = (priceChangeSevenDay / pricePerShare) * annualizedSevenDay;
-    let thirtyDayApr = (priceChangeThirtyDay / pricePerShare) * annualizedThirtyDay;
+  oneDayApr = oneDayApr * 100;
+  sevenDayApr = sevenDayApr * 100;
+  thirtyDayApr = thirtyDayApr * 100;
+  console.log(
+    "price change ",
+    priceChange,
+    " pricepreshare ",
+    pricePerShare,
+    " one day ago price ",
+    historical.oneDayAgo.price
+  );
+  let oneDayApy = aprToApy(oneDayApr);
+  let sevenDayApy = aprToApy(sevenDayApr);
+  let thirtyDayApy = aprToApy(thirtyDayApr);
+  oneDayApy = oneDayApy / 100;
+  sevenDayApy = sevenDayApy / 100;
+  thirtyDayApy = thirtyDayApy / 100;
 
-    oneDayApr = oneDayApr * 100;
-    sevenDayApr = sevenDayApr * 100;
-    thirtyDayApr = thirtyDayApr * 100;
-    console.log(
-      "price change ",
-      priceChange,
-      " pricepreshare ",
-      pricePerShare,
-      " one day ago price ",
-      historical.oneDayAgo.price
-    );
-    let oneDayApy = aprToApy(oneDayApr);
-    let sevenDayApy = aprToApy(sevenDayApr)
-    let thirtyDayApy = aprToApy(thirtyDayApr)
-    oneDayApy = oneDayApy / 100;
-    sevenDayApy = sevenDayApy / 100;
-    thirtyDayApy = thirtyDayApy / 100;
-
-
-
-    vaultReturn.oneDayApy = apyFormat(oneDayApy) + "%";
-    vaultReturn.sevenDayApy = apyFormat(sevenDayApy) + "%";
-    vaultReturn.thirtyDayApy = apyFormat(thirtyDayApy) + "%";
-
-  
+  vaultReturn.oneDayApy = apyFormat(oneDayApy) + "%";
+  vaultReturn.sevenDayApy = apyFormat(sevenDayApy) + "%";
+  vaultReturn.thirtyDayApy = apyFormat(thirtyDayApy) + "%";
 
   return vaultReturn;
 }
-
 
 async function runTest() {
   let test = {};
@@ -927,7 +972,8 @@ async function runTest() {
     apiAzure = await apiAzure.json();
     test.azure = apiAzure.timestamps[0];
   } catch (error) {
-    console.log("azure API fail -------------------------", error);test.azure = 0
+    console.log("azure API fail -------------------------", error);
+    test.azure = 0;
   }
   try {
     const mimAddress = "0x0A0b23D9786963DE69CB2447dC125c49929419d8";
@@ -942,7 +988,8 @@ async function runTest() {
     let pricePerShare = await mimContract.pricePerShare();
     test.mim = ethers.utils.formatUnits(pricePerShare, decimals);
   } catch (error) {
-    console.log("RPC fail -----------------------", error);test.mim=0
+    console.log("RPC fail -----------------------", error);
+    test.mim = 0;
   }
   return test;
 }
