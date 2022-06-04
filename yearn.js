@@ -1,5 +1,7 @@
 const { Client, Intents } = require("discord.js");
 
+const pgp = require("pg-promise")(/* initialization options */);
+
 const ethers = require("ethers");
 const fetch = require("cross-fetch");
 
@@ -30,6 +32,96 @@ let vaultAbi = [
   "function pricePerShare() public view returns (uint256)",
   "function decimals() public view returns (uint256)",
 ];
+
+const cn = {
+    host: "localhost", // server name or IP address;
+    port: 5432,
+    database: "nft",
+    user: process.env.USER,
+    password: process.env.PASSWORD,
+  };
+  const db = pgp(cn);
+
+  async function removeCollection(discord, collection) {
+    try {
+      let queryAddWallet =
+        "DELETE FROM gallery WHERE DISCORD='" +
+        discord +
+        "' AND COLLECTION='" +
+        collection +
+        "';";
+      //   console.log("deleting: ",queryAddWallet)
+      let addWallet = await db.any(queryAddWallet);
+      return "Collection `" + collection + "` removed!";
+    } catch (error) {
+      console.log(error);
+      return "Could not remove that collection friend, sorry!";
+    }
+  }
+
+async function addCollection(discord, collection) {
+    try {
+      let user = await getUser(discord);
+      let collectionReturned = await seaFetch(collection)
+      if(collectionReturned.success !== false) {
+      if (user.length > 9) {
+        return "You have hit the maximum of 10 collections";
+      }
+      let queryAddWallet =
+        "INSERT INTO gallery(DISCORD,COLLECTION) values('" +
+        discord +
+        "','" +
+        collection +
+        "');";
+      //   console.log("adding: ",queryAddWallet)
+      let addWallet = await db.any(queryAddWallet);
+      return "Collection `" + collection + "` added!";}
+      else{return "Collection not found"}
+    } catch (error) {
+      console.log(error);
+      return "Could not add that collection friend, sorry!";
+    }
+  }
+
+
+async function getUser(discord) {
+    let queryUser =
+      "SELECT discord,collection FROM gallery WHERE discord='" + discord + "';";
+    try {
+      let user = await db.any(queryUser);
+      return user;
+    } catch (error) {
+      return {};
+    }
+  }
+
+async function discordGallery(discord) {
+    try {
+      let playerWalletsQuery =
+        "SELECT DISCORD,COLLECTION from gallery WHERE DISCORD ='" + discord + "';";
+      let playerWalletsReturn = await db.any(playerWalletsQuery);
+      //   console.log(playerWalletsReturn)
+      let count = 1;
+      var walletsString = "";
+      console.log(playerWalletsQuery)
+      for (const player of playerWalletsReturn){
+        let fetched = await seaFetch(player.collection)
+        let floorPrice = fetched.stats.floor_price
+        console.log(floorPrice)
+        walletsString +=  player.collection + " `" + floorPrice + "`\n";
+        count += 1;
+      }
+      
+      if (walletsString === "") {
+        return "No collections stored. try `=add <collection name>`";
+      } else {
+        return walletsString;
+      }
+    } catch (error) {
+      console.log(error);
+      return "No collections stored. try `=add <collection name>`";
+    }
+  }
 
 // only fantom for now
 async function oneDayAgoPrice(vault) {
@@ -486,6 +578,50 @@ async function run() {
         console.log(error);
       }
     }
+
+  if (message.content.startsWith("=add")) {
+    let addQuery = message.content.split(" ");
+    wallet = addQuery[1];
+
+    try {
+      //  let fetchedSea = await seaFetch(x.collection)
+       
+      // check for user limit and existing address
+      let user = message.author.id;
+      addCollection(user, wallet).then((addText) => {
+        message.reply(addText);
+      });
+    } catch (error) {
+      message.reply("Invalid collection");
+    }
+  }
+  if (message.content === "=gallery") {
+   try {
+            discordGallery(message.author.id).then((galleryText) => {
+              //    console.log("=list text: ",walletsText);
+              message.reply(galleryText);
+            });
+          } catch (error) {
+            message.reply(
+              "No collections stored. You can `=add <wallet address>`"
+            );
+          }
+        }
+
+        if (message.content.startsWith("=remove")) {
+            let addQuery = message.content.split(" ");
+            wallet = addQuery[1];
+            try {
+              //  let fetchedSea = await seaFetch(x.collection)
+              let user = message.author.id;
+              removeCollection(user, wallet).then((removeText) => {
+                message.reply(removeText);
+              });
+            } catch (error) {
+              message.reply("Invalid collection");
+            }
+          }
+        
     if (
       message.content.startsWith("=vision") ||
       message.content.startsWith("=ftmvision")
@@ -620,6 +756,7 @@ async function run() {
         explorer = "https://ftmscan.com/address/";
         explorerName = "Ftmscan";
       }
+
       if (
         message.content.startsWith("=arbvault") ||
         message.content.startsWith("=arbitrumvault") ||
