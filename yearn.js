@@ -4,6 +4,7 @@ const pgp = require("pg-promise")(/* initialization options */);
 
 const ethers = require("ethers");
 const fetch = require("cross-fetch");
+const { JSDOM } = require("jsdom");
 
 const { priceFormat, apyFormat, commas, aprToApy } = require("./utils.js");
 
@@ -34,36 +35,36 @@ let vaultAbi = [
 ];
 
 const cn = {
-    host: "localhost", // server name or IP address;
-    port: 5432,
-    database: "nft",
-    user: process.env.USER,
-    password: process.env.PASSWORD,
-  };
-  const db = pgp(cn);
+  host: "localhost", // server name or IP address;
+  port: 5432,
+  database: "nft",
+  user: process.env.USER,
+  password: process.env.PASSWORD,
+};
+const db = pgp(cn);
 
-  async function removeCollection(discord, collection) {
-    try {
-      let queryAddWallet =
-        "DELETE FROM gallery WHERE DISCORD='" +
-        discord +
-        "' AND COLLECTION='" +
-        collection +
-        "';";
-      //   console.log("deleting: ",queryAddWallet)
-      let addWallet = await db.any(queryAddWallet);
-      return "Collection `" + collection + "` removed!";
-    } catch (error) {
-      console.log(error);
-      return "Could not remove that collection friend, sorry!";
-    }
+async function removeCollection(discord, collection) {
+  try {
+    let queryAddWallet =
+      "DELETE FROM gallery WHERE DISCORD='" +
+      discord +
+      "' AND COLLECTION='" +
+      collection +
+      "';";
+    //   console.log("deleting: ",queryAddWallet)
+    let addWallet = await db.any(queryAddWallet);
+    return "Collection `" + collection + "` removed!";
+  } catch (error) {
+    console.log(error);
+    return "Could not remove that collection friend, sorry!";
   }
+}
 
 async function addCollection(discord, collection) {
-    try {
-      let user = await getUser(discord);
-      let collectionReturned = await seaFetch(collection)
-      if(collectionReturned.success !== false) {
+  try {
+    let user = await getUser(discord);
+    let collectionReturned = await seaFetch(collection);
+    if (collectionReturned.success !== false) {
       if (user.length > 9) {
         return "You have hit the maximum of 10 collections";
       }
@@ -75,53 +76,56 @@ async function addCollection(discord, collection) {
         "');";
       //   console.log("adding: ",queryAddWallet)
       let addWallet = await db.any(queryAddWallet);
-      return "Collection `" + collection + "` added!";}
-      else{return "Collection not found"}
-    } catch (error) {
-      console.log(error);
-      return "Could not add that collection friend, sorry!";
+      return "Collection `" + collection + "` added!";
+    } else {
+      return "Collection not found";
     }
+  } catch (error) {
+    console.log(error);
+    return "Could not add that collection friend, sorry!";
   }
-
+}
 
 async function getUser(discord) {
-    let queryUser =
-      "SELECT discord,collection FROM gallery WHERE discord='" + discord + "';";
-    try {
-      let user = await db.any(queryUser);
-      return user;
-    } catch (error) {
-      return {};
-    }
+  let queryUser =
+    "SELECT discord,collection FROM gallery WHERE discord='" + discord + "';";
+  try {
+    let user = await db.any(queryUser);
+    return user;
+  } catch (error) {
+    return {};
   }
+}
 
 async function discordGallery(discord) {
-    try {
-      let playerWalletsQuery =
-        "SELECT DISCORD,COLLECTION from gallery WHERE DISCORD ='" + discord + "';";
-      let playerWalletsReturn = await db.any(playerWalletsQuery);
-      //   console.log(playerWalletsReturn)
-      let count = 1;
-      var walletsString = "";
-      console.log(playerWalletsQuery)
-      for (const player of playerWalletsReturn){
-        let fetched = await seaFetch(player.collection)
-        let floorPrice = fetched.stats.floor_price
-        console.log(floorPrice)
-        walletsString +=  player.collection + " `" + floorPrice + "`\n";
-        count += 1;
-      }
-      
-      if (walletsString === "") {
-        return "No collections stored. try `=add <collection name>`";
-      } else {
-        return walletsString;
-      }
-    } catch (error) {
-      console.log(error);
-      return "No collections stored. try `=add <collection name>`";
+  try {
+    let playerWalletsQuery =
+      "SELECT DISCORD,COLLECTION from gallery WHERE DISCORD ='" +
+      discord +
+      "';";
+    let playerWalletsReturn = await db.any(playerWalletsQuery);
+    //   console.log(playerWalletsReturn)
+    let count = 1;
+    var walletsString = "";
+    console.log(playerWalletsQuery);
+    for (const player of playerWalletsReturn) {
+      let fetched = await seaFetch(player.collection);
+      let floorPrice = fetched.stats.floor_price;
+      console.log(floorPrice);
+      walletsString += player.collection + " `" + floorPrice + "`\n";
+      count += 1;
     }
+
+    if (walletsString === "") {
+      return "No collections stored. try `=add <collection name>`";
+    } else {
+      return walletsString;
+    }
+  } catch (error) {
+    console.log(error);
+    return "No collections stored. try `=add <collection name>`";
   }
+}
 
 // only fantom for now
 async function oneDayAgoPrice(vault) {
@@ -183,8 +187,10 @@ async function listFantomVaults() {
 }
 
 async function listVaults(chain) {
-  let chainId = 1
-  if(chain === 42161) {chainId = 42161} 
+  let chainId = 1;
+  if (chain === 42161) {
+    chainId = 42161;
+  }
   try {
     let vaults = await fetchApi(chainId);
     // let vaults = mainBlob;
@@ -289,47 +295,96 @@ async function historicalPrice(vault, network) {
   }
 }
 async function allSea(collectionName) {
-  try{
-    let fetchedSea = await seaFetch(collectionName)
-    let floorPrice = fetchedSea.stats.floor_price
-    let numOwners = fetchedSea.stats.num_owners
-    let totalVolume = fetchedSea.stats.total_volume
-    let totalSupply = fetchedSea.stats.total_supply
+  try {
+    let fetchedSea = await seaFetch(collectionName);
+    let floorPrice = fetchedSea.stats.floor_price;
+    let numOwners = fetchedSea.stats.num_owners;
+    let totalVolume = fetchedSea.stats.total_volume;
+    let totalSupply = fetchedSea.stats.total_supply;
     let seaEmbed = new MessageEmbed()
-    .setColor("#0099ff")
-    .setTitle("OpenSea Details for `"  + collectionName + "`")
-    .setDescription("Floor Price `" + floorPrice + "`" +
-    "\nOwners `" + numOwners + "`" +
-    "\nTotal Volume `" + totalVolume.toFixed(0) + "`" +
-    "\nTotal Supply `" + totalSupply + "`"
-    )
-    .setImage();
-    return seaEmbed
-
-}catch(error){console.log(error)}
+      .setColor("#0099ff")
+      .setTitle("OpenSea Details for `" + collectionName + "`")
+      .setDescription(
+        "Floor Price `" +
+          floorPrice +
+          "`" +
+          "\nOwners `" +
+          numOwners +
+          "`" +
+          "\nTotal Volume `" +
+          totalVolume.toFixed(0) +
+          "`" +
+          "\nTotal Supply `" +
+          totalSupply +
+          "`"
+      )
+      .setImage();
+    return seaEmbed;
+  } catch (error) {
+    console.log(error);
+  }
 }
+
+async function getCryptoPunksFloor() {
+  const larvaLabsUrl = "https://www.larvalabs.com/cryptopunks/forsale";
+  let response = await fetch(larvaLabsUrl);
+
+  if (response.status === 200) {
+    response = await response.text();
+    const dom = new JSDOM(response);
+    const document = dom.window.document;
+
+    const price = document
+      .querySelector(".punk-image-text-dense")
+      .innerHTML.trim()
+      .split("<br>")[0];
+
+    return parseFloat(price);
+  } else {
+    console.log("Error fetching CryptoPunks floor price");
+    return 0;
+  }
+}
+
 async function seaFloor(collectionName) {
-    try{
-        let fetchedSea = await seaFetch(collectionName)
-        let floorPrice = fetchedSea.stats.floor_price
-        if (floorPrice === null) {
-            let oneDayAvgPrice = parseFloat(fetchedSea.stats.one_day_average_price) 
-            return "__OpenSea__ One Day Average Price For:\n`"+ collectionName + "` \ \ \ \ \ `" + oneDayAvgPrice.toFixed(2) + "` \ \ \ `ETH`"
+  try {
+    let floorPrice = null;
 
-        }else {
-        return "__OpenSea__ Floor Price For:\n`"+ collectionName + "` \ \ \ \ \ `" + floorPrice + "` \ \ \ `ETH`"
-        }
+    if (collectionName.trim() == "cryptopunks") {
+      floorPrice = await getCryptoPunksFloor();
+    } else {
+      let fetchedSea = await seaFetch(collectionName);
+      floorPrice = fetchedSea.stats.floor_price;
 
-    }catch(error) {return "Collection not found";console.log(error)}
+      if (floorPrice === null) {
+        let oneDayAvgPrice = parseFloat(fetchedSea.stats.one_day_average_price);
+        floorPrice = oneDayAvgPrice.toFixed(2);
+      }
+    }
+
+    return (
+      "__OpenSea__ Floor Price For:\n`" +
+      collectionName +
+      "`      `" +
+      floorPrice +
+      "`    `ETH`"
+    );
+  } catch (error) {
+    console.log(error);
+    return "Collection not found";
+  }
 }
 
 async function seaFetch(collectionName) {
   try {
-    let fetchSea = await fetch("https://api.opensea.io/api/v1/collection/" + collectionName + "/stats")
-        let fetchedSea = await fetchSea.json()
-        return fetchedSea
-
-  }catch(error){console.log(error)}
+    let fetchSea = await fetch(
+      "https://api.opensea.io/api/v1/collection/" + collectionName + "/stats"
+    );
+    let fetchedSea = await fetchSea.json();
+    return fetchedSea;
+  } catch (error) {
+    console.log(error);
+  }
 }
 
 async function run() {
@@ -340,20 +395,20 @@ async function run() {
     // .addField('', '', true)
     // if (message.content === "=vaults") {
     // }
-    if(message.content.startsWith("=floor")) {
-            let seaRequest = message.content.split(" ");
-            let collection = seaRequest[1];
-            seaFloor(collection).then(sea =>{message.reply(sea)}
-
-            )
-    }
-    if(message.content.startsWith("=sea")) {
+    if (message.content.startsWith("=floor")) {
       let seaRequest = message.content.split(" ");
       let collection = seaRequest[1];
-      allSea(collection).then(sea =>{message.reply({embeds: [sea]})}
-
-      )
-}
+      seaFloor(collection).then((sea) => {
+        message.reply(sea);
+      });
+    }
+    if (message.content.startsWith("=sea")) {
+      let seaRequest = message.content.split(" ");
+      let collection = seaRequest[1];
+      allSea(collection).then((sea) => {
+        message.reply({ embeds: [sea] });
+      });
+    }
     if (message.content === "=ftmvaults") {
       let listString = "";
       {
@@ -365,7 +420,10 @@ async function run() {
         });
       }
     }
-    if (message.content === "=arbvaults" || message.content === "=arbitrumvaults") {
+    if (
+      message.content === "=arbvaults" ||
+      message.content === "=arbitrumvaults"
+    ) {
       let listString = "";
       {
         listVaults(42161).then((vaultList) => {
@@ -579,49 +637,47 @@ async function run() {
       }
     }
 
-  if (message.content.startsWith("=add")) {
-    let addQuery = message.content.split(" ");
-    wallet = addQuery[1];
+    if (message.content.startsWith("=add")) {
+      let addQuery = message.content.split(" ");
+      wallet = addQuery[1];
 
-    try {
-      //  let fetchedSea = await seaFetch(x.collection)
-       
-      // check for user limit and existing address
-      let user = message.author.id;
-      addCollection(user, wallet).then((addText) => {
-        message.reply(addText);
-      });
-    } catch (error) {
-      message.reply("Invalid collection");
+      try {
+        //  let fetchedSea = await seaFetch(x.collection)
+
+        // check for user limit and existing address
+        let user = message.author.id;
+        addCollection(user, wallet).then((addText) => {
+          message.reply(addText);
+        });
+      } catch (error) {
+        message.reply("Invalid collection");
+      }
     }
-  }
-  if (message.content === "=gallery") {
-   try {
-            discordGallery(message.author.id).then((galleryText) => {
-              //    console.log("=list text: ",walletsText);
-              message.reply(galleryText);
-            });
-          } catch (error) {
-            message.reply(
-              "No collections stored. You can `=add <wallet address>`"
-            );
-          }
-        }
+    if (message.content === "=gallery") {
+      try {
+        discordGallery(message.author.id).then((galleryText) => {
+          //    console.log("=list text: ",walletsText);
+          message.reply(galleryText);
+        });
+      } catch (error) {
+        message.reply("No collections stored. You can `=add <wallet address>`");
+      }
+    }
 
-        if (message.content.startsWith("=remove")) {
-            let addQuery = message.content.split(" ");
-            wallet = addQuery[1];
-            try {
-              //  let fetchedSea = await seaFetch(x.collection)
-              let user = message.author.id;
-              removeCollection(user, wallet).then((removeText) => {
-                message.reply(removeText);
-              });
-            } catch (error) {
-              message.reply("Invalid collection");
-            }
-          }
-        
+    if (message.content.startsWith("=remove")) {
+      let addQuery = message.content.split(" ");
+      wallet = addQuery[1];
+      try {
+        //  let fetchedSea = await seaFetch(x.collection)
+        let user = message.author.id;
+        removeCollection(user, wallet).then((removeText) => {
+          message.reply(removeText);
+        });
+      } catch (error) {
+        message.reply("Invalid collection");
+      }
+    }
+
     if (
       message.content.startsWith("=vision") ||
       message.content.startsWith("=ftmvision")
